@@ -13,7 +13,7 @@
     } while (0)
 
 // ---------------------------------------------------------------------
-// Naïve SGEMM kernel (row‑major, one thread per output element)
+// Naïve kernel (row‑major, one thread per output element)
 // ---------------------------------------------------------------------
 __global__ void naive(int M, int N, int K,
                             float alpha,
@@ -53,8 +53,8 @@ static double gflops(int M, int N, int K, double sec)
     return 2.0 * M * N * K / (sec * 1e9);
 }
 
-// ---------------------------------------------------------------------
-// Main driver – prints exactly the format you requested
+// --------------------------------------------------------------------
+// Main driver 
 // ---------------------------------------------------------------------
 int main()
 {
