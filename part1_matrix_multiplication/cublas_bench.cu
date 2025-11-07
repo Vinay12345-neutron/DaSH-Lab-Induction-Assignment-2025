@@ -1,3 +1,7 @@
+#ifndef uint
+#define uint unsigned int
+#endif
+
 #include <iostream>
 #include <random>
 #include <cuda_runtime.h>

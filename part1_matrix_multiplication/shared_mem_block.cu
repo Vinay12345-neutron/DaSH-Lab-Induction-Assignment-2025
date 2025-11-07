@@ -1,6 +1,10 @@
 //==========================================================================
 // shared_mem_block.cu – GEMM with shared‑memory blocking
 //==========================================================================
+#ifndef uint
+#define uint unsigned int
+#endif
+
 
 #include <iostream>
 #include <random>

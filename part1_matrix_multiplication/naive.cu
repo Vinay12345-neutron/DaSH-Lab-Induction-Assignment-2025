@@ -1,6 +1,10 @@
 #include <iostream>
 #include <random>
 #include <cuda_runtime.h>
+#ifndef uint
+#define uint unsigned int
+#endif
+
 
 #define CUDA_CHECK(err)                                                   \
     do {                                                                  \

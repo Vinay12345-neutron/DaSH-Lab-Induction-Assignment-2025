@@ -1,6 +1,10 @@
 //==========================================================================
 //  vectorize.cu – GEMM with 2‑D block tiling and float4 vectorisation
 //==========================================================================
+#ifndef uint
+#define uint unsigned int
+#endif
+
 
 #include <iostream>
 #include <random>

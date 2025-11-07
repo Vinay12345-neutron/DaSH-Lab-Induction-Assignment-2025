@@ -1,6 +1,12 @@
 //==========================================================================
 // 2D_block_tiling.cu – GEMM with 2‑D block tiling (register‑blocked)
 //==========================================================================
+// for Windows adding below block of code
+#ifndef uint
+#define uint unsigned int
+#endif
+// 
+
 
 #include <iostream>
 #include <random>

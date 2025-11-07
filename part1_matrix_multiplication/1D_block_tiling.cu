@@ -1,6 +1,10 @@
 //==========================================================================
 // 1d_block_tiling.cu – GEMM with 1‑D block tiling (register‑blocked)
 //==========================================================================
+#ifndef uint
+#define uint unsigned int
+#endif
+
 
 #include <iostream>
 #include <random>

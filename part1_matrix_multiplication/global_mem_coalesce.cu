@@ -1,6 +1,10 @@
 //==========================================================================
 // global_mem_coalesce.cu – GEMM with coalesced global loads
 //==========================================================================
+#ifndef uint
+#define uint unsigned int
+#endif
+
 
 #include <iostream>
 #include <random>
