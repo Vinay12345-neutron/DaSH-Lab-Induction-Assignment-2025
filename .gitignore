@@ -1,1 +1,3 @@
 *.exe
+*.nsys-rep
+*.sqlite
