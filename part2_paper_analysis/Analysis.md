@@ -32,7 +32,7 @@ The proposed solution is the vLLM system, built on PagedAttention.
 
 **Scheduling and Preemption:** The system uses a centralized scheduler and implements a block-level swap-out mechanism (to CPU RAM) or recomputation to handle memory exhaustion, enabling effective preemption of low-priority requests without losing all progress.
 
-## 2. Technical Understanding (2-3 Pages)
+## 2. Technical Understanding 
 
 ### a) Problem Analysis
 
@@ -72,11 +72,11 @@ The problem is exacerbated by complex decoding algorithms:
 
 ### System design and architecture
 
-The vLLM system (Figure 4) adopts a distributed architecture with a centralized Scheduler and multiple distributed GPU Workers. The key innovation is the KV Cache Manager, which manages memory in a paged fashion, enabled by the new attention algorithm.
+The vLLM system adopts a distributed architecture with a centralized Scheduler and multiple distributed GPU Workers. The key innovation is the KV Cache Manager, which manages memory in a paged fashion, enabled by the new attention algorithm.
 
 ### Key algorithms or techniques
 
-PagedAttention (Paging for LLMs): This is the core modification to the attention mechanism.
+**PagedAttention (Paging for LLMs):** This is the core modification to the attention mechanism.
 
 The KV cache for a sequence is divided into Logical KV Blocks.
 
@@ -84,33 +84,33 @@ The system maintains a Block Table for each sequence, mapping its Logical KV Blo
 
 The PagedAttention kernel is modified to read the key and value vectors block-wise using this block table mapping (Figure 5). This non-contiguous access decouples the logical view of the sequence from the physical memory layout, eliminating the contiguous memory requirement.
 
-Dynamic Block Allocation:
+**Dynamic Block Allocation:**
 
 Physical blocks are allocated dynamically and on demand as new tokens are generated. Since all physical blocks are fixed-size, external fragmentation is eliminated, and internal fragmentation is minimized to, at most, one KV block per sequence.
 
-Copy-on-Write (CoW) for Sharing:
+**Copy-on-Write (CoW) for Sharing:**
 
 For parallel sampling or beam search, sequences share the same physical blocks for their common prefixes (e.g., the input prompt blocks).
 
-Each physical block has a reference count (Figure 8).
+**Each physical block has a reference count**
 
 When a sequence needs to write a new token to a shared physical block, the system detects the reference count is greater than 1, allocates a new physical block, copies the data from the old shared block (CoW), updates the sequence's block table entry to point to the new block, and decrements the old block's reference count. This achieves memory sharing with minimal overhead.
 
-Preemption and Recovery:
+**Preemption and Recovery:**
 
 When GPU memory runs out, the scheduler preempts a sequence group (like beam candidates).
 
 The recovery method is either:
 
-Swapping: The KV blocks are copied from GPU memory to CPU RAM via the CPU Block Allocator.
+**Swapping:** The KV blocks are copied from GPU memory to CPU RAM via the CPU Block Allocator.
 
-Recomputation: The blocks are simply discarded, and when the request is rescheduled, the model recomputes the necessary KV cache by treating the previously generated sequence as a new prompt.
+**Recomputation:** The blocks are simply discarded, and when the request is rescheduled, the model recomputes the necessary KV cache by treating the previously generated sequence as a new prompt.
 
 ### c) Evaluation
 
 ### Experimental setup
 
-Models: OPT-13B, OPT-66B, OPT-175B, and LLAMA-13B, run on NVIDIA A100 GPUs (1 to 8 GPUs depending on model size).
+**Models:** OPT-13B, OPT-66B, OPT-175B, and LLAMA-13B, run on NVIDIA A100 GPUs (1 to 8 GPUs depending on model size).
 
 Workloads: Synthesized requests based on real-world datasets with different length characteristics:
 
@@ -118,7 +118,7 @@ ShareGPT: Long sequences with high variance.
 
 Alpaca: Shorter sequences with lower variance.
 
-Baselines:
+**Baselines:**
 
 Faster Transformer (FT): Distributed, latency-optimized engine using basic memory allocation (similar to Orca Max).
 
@@ -134,17 +134,17 @@ Key Metric: Normalized latency (seconds/token) vs. Request rate (req/s). A bette
 
 ### Key results and metrics
 
-Basic Sampling (Figure 12): On the memory-intensive ShareGPT workload, vLLM sustains 1.7x-2.7x higher request rates compared to the infeasible upper-bound Orca (Oracle), and up to 8x higher than Orca (Max). This is because vLLM batches 2.2x to 4.3x more requests simultaneously by reclaiming wasted memory (Figure 13).
+Basic Sampling: On the memory-intensive ShareGPT workload, vLLM sustains 1.7x-2.7x higher request rates compared to the infeasible upper-bound Orca (Oracle), and up to 8x higher than Orca (Max). This is because vLLM batches 2.2x to 4.3x more requests simultaneously by reclaiming wasted memory.
 
-Complex Decoding (Figure 14 & 15): The benefits of sharing are profound:
+Complex Decoding: The benefits of sharing are profound:
 
 In Beam Search (width=6), vLLM's throughput advantage over Orca (Oracle) increases from 1.3x (basic sampling) to 2.3x.
 
 This is due to high memory saving: $37.6\%$ to $55.2\%$ for beam search, achieved via CoW and reference counting.
 
-Shared Prefix (Figure 16): For workloads with long shared context (few-shot prefix prompt), vLLM achieves 3.58x higher throughput than Orca (Oracle) by caching and sharing the prefix KV blocks.
+Shared Prefix: For workloads with long shared context (few-shot prefix prompt), vLLM achieves 3.58x higher throughput than Orca (Oracle) by caching and sharing the prefix KV blocks.
 
-Ablation Study (Figure 18):
+Ablation Study:
 
 The PagedAttention kernel introduces a small overhead (20-26% higher latency) compared to the highly optimized contiguous attention in Faster Transformer, but this micro-overhead is negligible in the overall end-to-end throughput gain.
 
@@ -160,7 +160,7 @@ Flexible sharing: The superior performance in beam search and parallel sampling 
 
 High throughput: The consistent 2x-4x throughput improvements across different models and workloads (Figure 12) prove that solving the memory bottleneck via paging is the key to maximizing GPU utility in LLM serving.
 
-## 3. Critical Analysis (2-3 Pages)
+## 3. Critical Analysis
 
 ### Strengths
 
