@@ -1,8 +1,12 @@
-| Implementation             | Time (ms) | GFLOPS  | % of cuBLAS | Speedup vs Naive |
-|----------------------------|-----------|---------|-------------|------------------|
-| Naive                      |           |         |             | 1.0x             |
-| Tiled (shared memory)      |           |         |             |                  |
-| Tiled + Coalesced          |           |         |             |                  |
-| + Register blocking        |           |         |             |                  |
-| [Your optimizations...]    |           |         |             |                  |
-| cuBLAS                     |           |         |             |                  |
+
+For M=N=K=4096, alpha = 0.5, beta = 3.0
+| Implementation             | Time (s) | GFLOPS | % of cuBLAS | Speedup vs Naive |
+| -------------------------- | -------- | ------ | ----------- | ---------------- |
+| **Naive**                  | 0.952    | 144.4  | 2.87%       | 1.00×            |
+| **Global Memory Coalesce** | 0.269    | 511.8  | 10.16%      | 3.55×            |
+| **Shared Memory Block**    | 0.201    | 684.6  | 13.59%      | 4.74×            |
+| **1D Block Tiling**        | 0.065    | 2111.8 | 41.92%      | 14.63×           |
+| **2D Block Tiling**        | 0.034    | 4015.5 | 79.70%      | 27.81×           |
+| **Vectorize**              | 0.029438 | 4668.7 | 92.67%      | 32.32×           |
+| **Autotuning**             | 0.027472 | 5002.8 | 99.30%      | 34.63×           |
+| **CuBLAS**                 | 0.027311 | 5038.0 | 100.00%     | 34.89×           |
