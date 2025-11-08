@@ -1,5 +1,5 @@
 
-### 🧩 **Windows Compilation & Profiling Instructions (Nsight Systems + Nsight Compute)**
+### 🧩 **Windows Compilation & Profiling Instructions (Nsight Systems + Nsight Compute). NOT WSL/Linux Compatible**
 
 #### **1️⃣ Compile your CUDA program**
 
