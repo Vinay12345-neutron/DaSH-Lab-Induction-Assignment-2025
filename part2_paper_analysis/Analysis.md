@@ -1,79 +1,80 @@
-Efficient Memory Management for Large Language Model Serving with PagedAttention
+# Efficient Memory Management for Large Language Model Serving with PagedAttention
 
 Conference: SOSP 2023
 Authors: Woosuk Kwon, Zhuohan Li, Siyuan Zhuang, Ying Sheng, Lianmin Zheng, Cody Hao Yu, Joseph E. Gonzalez, Hao Zhang, Ion Stoica
 
-1. Summary (1 Page)
 
-What problem does the paper address?
+## 1. Summary
+
+### What problem does the paper address?
 
 The paper addresses the significant problem of inefficient GPU memory utilization during the serving (inference) of Large Language Models (LLMs), particularly within the Key-Value (KV) cache used by the Transformer's self-attention mechanism. The KV cache is crucial for autoregressive generation but dynamically grows and shrinks, and existing serving systems struggle to manage this dynamic memory efficiently, leading to high memory fragmentation and redundant duplication. This inefficiency drastically limits the maximum batch size of concurrent requests, making LLM serving expensive and throughput-limited.
 
-Why is this problem important?
+### Why is this problem important?
 
 The problem is critical because LLMs are computationally expensive, and serving costs are a major bottleneck for widespread commercial and research deployment. Throughput is proportional to the number of requests that can be batched together. If memory is wasted, the batch size is limited, and the expensive GPU compute resources are underutilized (the workload becomes memory-bound). As GPU compute power grows faster than GPU memory capacity, this memory bottleneck is becoming increasingly severe. Improving memory efficiency directly translates to 2-4x higher throughput, significantly reducing the cost per request.
 
-What is the key insight or main contribution?
+### What is the key insight or main contribution?
 
 The key insight is that the memory management challenges in LLM KV cache—dynamic size, need for contiguous access, and potential for sharing—are analogous to the challenges faced by operating systems (OS) when managing memory for processes.
 
 The main contribution is PagedAttention, an attention algorithm inspired by the classical OS concepts of virtual memory and paging. PagedAttention allows the KV cache for a sequence to be stored in non-contiguous physical memory blocks, enabling fine-grained, block-level memory management and sharing.
 
-Brief overview of the proposed solution
+### Brief overview of the proposed solution
 
 The proposed solution is the vLLM system, built on PagedAttention.
 
-PagedAttention: It partitions the KV cache of a sequence into fixed-size "KV blocks" (analogous to OS pages). The attention kernel is modified to fetch and process these non-contiguous blocks via a Block Table (analogous to an OS page table).
+**PagedAttention:** It partitions the KV cache of a sequence into fixed-size "KV blocks" (analogous to OS pages). The attention kernel is modified to fetch and process these non-contiguous blocks via a Block Table (analogous to an OS page table).
 
-KV Cache Manager: This component dynamically allocates physical blocks on demand for a request's logical blocks. Because blocks are fixed-size and allocated on demand, internal and external fragmentation are nearly eliminated.
+**KV Cache Manager:** This component dynamically allocates physical blocks on demand for a request's logical blocks. Because blocks are fixed-size and allocated on demand, internal and external fragmentation are nearly eliminated.
 
-Memory Sharing: The block table structure enables memory sharing. For complex decoding algorithms like parallel sampling and beam search, the system uses a reference counting mechanism on physical blocks and implements a copy-on-write policy, allowing multiple sequences to share common KV cache blocks (e.g., for shared prompts or beam search prefixes).
+**Memory Sharing:** The block table structure enables memory sharing. For complex decoding algorithms like parallel sampling and beam search, the system uses a reference counting mechanism on physical blocks and implements a copy-on-write policy, allowing multiple sequences to share common KV cache blocks (e.g., for shared prompts or beam search prefixes).
 
-Scheduling and Preemption: The system uses a centralized scheduler and implements a block-level swap-out mechanism (to CPU RAM) or recomputation to handle memory exhaustion, enabling effective preemption of low-priority requests without losing all progress.
+**Scheduling and Preemption:** The system uses a centralized scheduler and implements a block-level swap-out mechanism (to CPU RAM) or recomputation to handle memory exhaustion, enabling effective preemption of low-priority requests without losing all progress.
 
-2. Technical Understanding (2-3 Pages)
+## 2. Technical Understanding (2-3 Pages)
 
-a) Problem Analysis
+### a) Problem Analysis
 
-Detailed explanation of the problem
+### Detailed explanation of the problem
 
 LLM serving is characterized by autoregressive generation, where the generation of the current token depends on all previous tokens in the sequence. This dependency is maintained using the KV cache, which stores the key ($K$) and value ($V$) vectors for every previously generated token.
 
 The core issue arises from two characteristics of the KV cache:
 
-Dynamic and Unpredictable Size: The output length of an LLM request is unknown a priori. It grows one token at a time until termination.
+**Dynamic and Unpredictable Size:** The output length of an LLM request is unknown a priori. It grows one token at a time until termination.
 
-Contiguous Memory Requirement: Existing deep learning frameworks and specialized serving systems (like Faster Transformer) require the KV cache tensor for a single sequence to be stored in a contiguous chunk of GPU memory.
+**Contiguous Memory Requirement:** Existing deep learning frameworks and specialized serving systems (like Faster Transformer) require the KV cache tensor for a single sequence to be stored in a contiguous chunk of GPU memory.
 
-Why existing solutions are inadequate
+### Why existing solutions are inadequate
 
 Existing solutions, exemplified by Orca (a state-of-the-art system) and Faster Transformer, are inadequate because they rely on statically or over-provisionally allocating a contiguous memory chunk based on the request's maximum possible sequence length (e.g., 2048 tokens). This approach leads to three main types of memory waste (as quantified in Figure 2):
 
-Internal Fragmentation: Memory reserved for the request's maximum possible length that is never actually used if the generated sequence is short. This can be up to $57.3\%$ of the KV cache memory (Orca Max).
+**Internal Fragmentation:** Memory reserved for the request's maximum possible length that is never actually used if the generated sequence is short. This can be up to $57.3\%$ of the KV cache memory (Orca Max).
 
-Reserved Slots: Memory slots reserved for tokens that will be generated in the future. Although eventually used, reserving this space for the entire request lifetime prevents other requests from using it, limiting concurrent batching.
+**Reserved Slots:** Memory slots reserved for tokens that will be generated in the future. Although eventually used, reserving this space for the entire request lifetime prevents other requests from using it, limiting concurrent batching.
 
-External Fragmentation: Since the required contiguous chunk sizes vary between requests, a contiguous memory allocator (like the buddy allocator used by Orca) cannot efficiently pack the chunks, leaving unusable gaps.
+**External Fragmentation:** Since the required contiguous chunk sizes vary between requests, a contiguous memory allocator (like the buddy allocator used by Orca) cannot efficiently pack the chunks, leaving unusable gaps.
 
 Furthermore, the requirement for a contiguous chunk prohibits memory sharing. In complex decoding (like beam search or parallel sampling), multiple output sequences often share a common prompt or prefix. Contiguous allocation forces a full copy for each sequence, duplicating the shared prefix cache and wasting significant memory (Figure 8).
 
-Motivating examples or workloads
+### Motivating examples or workloads
 
 The inadequacy is clearly motivated by workloads with high variance in sequence length, such as the ShareGPT dataset, which has long inputs and outputs (mean input: 161 tokens, mean output: 338 tokens) and high variance.
 
 The problem is exacerbated by complex decoding algorithms:
 
-Parallel Sampling: Generates multiple independent sequences from a single prompt. The KV cache for the (often long) prompt is duplicated across all samples.
+**Parallel Sampling:** Generates multiple independent sequences from a single prompt. The KV cache for the (often long) prompt is duplicated across all samples.
 
-Beam Search: Generates multiple candidate sequences, which share large common prefixes that change dynamically. Duplicating or frequently copying these large prefixes results in high memory/copy overhead.
+**Beam Search:** Generates multiple candidate sequences, which share large common prefixes that change dynamically. Duplicating or frequently copying these large prefixes results in high memory/copy overhead.
 
-b) Proposed Solution
+### b) Proposed Solution
 
-System design and architecture
+### System design and architecture
 
 The vLLM system (Figure 4) adopts a distributed architecture with a centralized Scheduler and multiple distributed GPU Workers. The key innovation is the KV Cache Manager, which manages memory in a paged fashion, enabled by the new attention algorithm.
 
-Key algorithms or techniques
+### Key algorithms or techniques
 
 PagedAttention (Paging for LLMs): This is the core modification to the attention mechanism.
 
@@ -105,9 +106,9 @@ Swapping: The KV blocks are copied from GPU memory to CPU RAM via the CPU Block 
 
 Recomputation: The blocks are simply discarded, and when the request is rescheduled, the model recomputes the necessary KV cache by treating the previously generated sequence as a new prompt.
 
-c) Evaluation
+### c) Evaluation
 
-Experimental setup
+### Experimental setup
 
 Models: OPT-13B, OPT-66B, OPT-175B, and LLAMA-13B, run on NVIDIA A100 GPUs (1 to 8 GPUs depending on model size).
 
@@ -131,7 +132,7 @@ Orca (Oracle): Assumes perfect knowledge of final output length (infeasible uppe
 
 Key Metric: Normalized latency (seconds/token) vs. Request rate (req/s). A better system maintains low normalized latency at higher request rates.
 
-Key results and metrics
+### Key results and metrics
 
 Basic Sampling (Figure 12): On the memory-intensive ShareGPT workload, vLLM sustains 1.7x-2.7x higher request rates compared to the infeasible upper-bound Orca (Oracle), and up to 8x higher than Orca (Max). This is because vLLM batches 2.2x to 4.3x more requests simultaneously by reclaiming wasted memory (Figure 13).
 
@@ -149,7 +150,7 @@ The PagedAttention kernel introduces a small overhead (20-26% higher latency) co
 
 Optimal Block Size is around 16-32 tokens, balancing GPU utilization/parallelism (larger size preferred) against internal fragmentation (smaller size preferred).
 
-How results support the claims
+### How results support the claims
 
 The results strongly support the claims:
 
@@ -159,9 +160,9 @@ Flexible sharing: The superior performance in beam search and parallel sampling 
 
 High throughput: The consistent 2x-4x throughput improvements across different models and workloads (Figure 12) prove that solving the memory bottleneck via paging is the key to maximizing GPU utility in LLM serving.
 
-3. Critical Analysis (2-3 Pages)
+## 3. Critical Analysis (2-3 Pages)
 
-Strengths
+### Strengths
 
 Novel Insight and Conceptual Elegance: The application of virtual memory and paging—a 60-year-old OS concept—to modern GPU memory management for LLM serving is a highly novel and elegant solution. It successfully reframes the dynamically growing KV cache as a "virtual memory space" problem, demonstrating fundamental computer science principles transcend hardware generations.
 
@@ -171,7 +172,7 @@ Effective Handling of Complex Workloads: The introduction of Copy-on-Write (CoW)
 
 Robust Evaluation against Strong Baselines: The paper uses comprehensive and realistic baselines, including three versions of Orca (Max, Pow2, and the infeasible Oracle upper-bound). Beating the Orca (Oracle) baseline decisively proves that the system design (paged memory) is fundamentally superior to the contiguous allocation paradigm, even when the latter has perfect a priori knowledge.
 
-Weaknesses
+### Weaknesses
 
 Kernel Overhead and Optimality: While the paper claims the 20-26% higher attention kernel latency for PagedAttention (Figure 18a) is small, this overhead is fundamental to the non-contiguous memory access. As models get smaller or token generation latency becomes dominated by compute rather than memory (e.g., with very fast future GPUs), this overhead could become the dominant factor, limiting the theoretical peak performance of the GPU. The design is optimized for memory-bound scenarios, which may not always hold true.
 
@@ -179,35 +180,35 @@ Increased Complexity and Implementation Burden: Introducing a block table, a two
 
 Swapping vs. Recomputation Trade-off: The discussion and evaluation of swapping (to CPU RAM) vs. recomputation (Figure 19) are important but show that the optimal recovery mechanism is highly dependent on the block size and the PCIe bandwidth. Given that recomputation latency is never much worse than swapping and is much simpler, the argument for including swapping as a feature is somewhat weak, especially since it requires the complexity of a separate CPU block allocator and memory transfer management.
 
-Specific Critiques (Choose at least 3)
+### Specific Critiques 
 
-1. Are the evaluation metrics appropriate? (Critique: Mostly Appropriate, but one key metric is missing)
+### 1. Are the evaluation metrics appropriate? (Critique: Mostly Appropriate, but one key metric is missing)
 
 The use of Normalized Latency (s/token) vs. Request Rate (req/s) is highly appropriate for measuring serving throughput and system capacity. However, a key metric for memory systems, Jitter/Tail Latency, is largely missing. While mean normalized latency is measured, LLM services often have strict Service Level Objectives (SLOs) on 95th or 99th percentile latency. The preemption/swapping mechanism, while good for overall throughput, can introduce high latency spikes (jitter) for the preempted requests. A more complete evaluation of $p95/p99$ latency, especially for workloads that trigger preemption, would be necessary to fully assess the system's suitability for production environments.
 
-2. Is the baseline comparison fair? (Critique: Extremely Fair and Effective)
+### 2. Is the baseline comparison fair? (Critique: Extremely Fair and Effective)
 
 The baseline comparison is outstandingly fair. By implementing three versions of Orca, particularly the Orca (Oracle) baseline, the authors move beyond simply comparing against existing performance and instead benchmark against the theoretical upper bound of the contiguous-allocation design. Demonstrating that vLLM still outperforms the Oracle baseline by up to 2.7x (Figure 12) is the most compelling piece of evidence that the paging approach is fundamentally superior for this class of problem, regardless of how well the contiguous approach is optimized.
 
-3. Does the solution generalize beyond the tested scenarios? (Critique: High Generalizability, but limited to KV Cache/Autoregression)
+### 3. Does the solution generalize beyond the tested scenarios? (Critique: High Generalizability, but limited to KV Cache/Autoregression)
 
 The core PagedAttention concept generalizes well to any autoregressive Transformer-based model (not just OPT/LLAMA) and any task that involves shared state (chatbots, complex sampling, prefix tuning). The solution's power lies in addressing a memory bottleneck common to all sequential, token-by-token generation. However, the solution is specifically limited to the KV cache and autoregressive decoding. As the authors acknowledge, it is not directly applicable to traditional DNN training or serving non-autoregressive models, where static tensor shapes and compute-bound nature make the benefits of memory indirection negligible or detrimental.
 
-4. Are the claimed contributions novel? (Critique: Novel in Application, not in Principle)
+### 4. Are the claimed contributions novel? (Critique: Novel in Application, not in Principle)
 
 The claimed contributions are highly novel in their application and integration into a high-performance LLM serving system, but the core principle (paging, block table, copy-on-write) is a direct, acknowledged adaptation of operating system concepts dating back to the 1960s (Kilburn et al., 1962). The true novelty lies in identifying the structural analogy between OS processes/memory and LLM sequences/KV cache, and then successfully engineering the attention kernel and memory manager to realize these principles on modern GPU hardware.
 
-4. Personal Reflection (1 Page)
+## 4. Personal Reflection 
 
-What did you learn?
+### What did I learn?
 
 I learned a profound lesson about the cyclical nature of computer science problems. The core challenges of modern, bleeding-edge AI infrastructure—dynamic resource allocation, fragmentation, and state sharing—are conceptually identical to the fundamental memory management problems that operating systems designers solved decades ago. Specifically, I realized that the Transformer's KV cache is essentially a process's dynamically growing stack/heap space that needs to be accessed contiguously in a logical sense, but must be managed non-contiguously in a physical sense to maximize memory density. I also gained a much deeper appreciation for the high cost of memory fragmentation in modern, high-throughput systems.
 
-What surprised you?
+### What surprised me?
 
 What surprised me most was the magnitude of the performance gain over the Orca (Oracle) baseline. Prior to reading the evaluation, I would have assumed that an "Oracle" system (knowing the exact sequence length beforehand) would be nearly unbeatable. The fact that vLLM's system design allowed it to outperform the contiguous-allocation system's theoretical maximum by 1.7x to 2.7x shows that the memory inefficiency is not just about prediction error (the Orca Max/Pow2 issue), but a fundamental design flaw in using contiguous tensors for dynamically sized objects in a batching environment. The elegance of using Copy-on-Write for shared state in beam search was also a delightful surprise—it's a perfect fit.
 
-How does this relate to other systems concepts you know?
+### How does this relate to other systems concepts you know?
 
 This work directly relates to several core systems concepts:
 
@@ -217,7 +218,7 @@ Database/Storage Systems: The dynamic memory management and eviction policies (s
 
 Compiler/Runtime Systems: The use of kernel fusion (fusing block read/write with attention) to mitigate memory indirection overhead is a classic compiler/runtime optimization technique, ensuring that abstract/flexible structures (like the block table) don't incur excessive runtime costs.
 
-Would you have designed it differently? How?
+### Would I have designed it differently? How?
 
 Given the results, the vLLM design is highly effective, but if I were designing it, I would have focused the recovery mechanism purely on Recomputation and eliminated the complexity of the Swapping feature.
 

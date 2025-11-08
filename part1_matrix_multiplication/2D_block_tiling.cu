@@ -207,7 +207,7 @@ static double gflops(int M, int N, int K, double sec)
 // ---------------------------------------------------------------------
 int main()
 {
-    std::cout << "Running 2D‑Block‑Tiling Implementation" << std::endl;
+    std::cout << "Running 2D-Block-Tiling Implementation" << std::endl;
 
     const int maxSize = 4096;
     const int sizes[] = {128, 256, 512, 1024, 2048, 4096};
