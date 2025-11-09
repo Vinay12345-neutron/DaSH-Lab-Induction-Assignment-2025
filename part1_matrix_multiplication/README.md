@@ -1,7 +1,7 @@
 
-### 🧩 **Windows Compilation & Profiling Instructions (Nsight Systems + Nsight Compute). NOT WSL/Linux Compatible**
+### **Windows Compilation & Profiling Instructions (Nsight Systems + Nsight Compute). NOT WSL/Linux Compatible**
 
-#### **1️⃣ Compile your CUDA program**
+#### **1. Compile your CUDA program**
 
 Open **PowerShell (as Administrator)** and run:
 
@@ -9,7 +9,7 @@ Open **PowerShell (as Administrator)** and run:
 nvcc -O3 -arch=sm_86 -lcublas -o 2D_block_tiling.exe 2D_block_tiling.cu
 ```
 
-> 📝 **Note:**
+> **Note:**
 > If compiling on Windows, ensure this small code snippet is added at the top of your `.cu` file to avoid type errors:
 >
 > ```cpp
@@ -20,7 +20,7 @@ nvcc -O3 -arch=sm_86 -lcublas -o 2D_block_tiling.exe 2D_block_tiling.cu
 
 ---
 
-#### **2️⃣ Profile using Nsight Systems**
+#### **2. Profile using Nsight Systems**
 
 In the same PowerShell window (Administrator mode), run:
 
@@ -36,7 +36,7 @@ This will generate a report file named:
 
 ---
 
-#### **3️⃣ Analyze with Nsight Compute**
+#### **3. Analyze with Nsight Compute**
 
 * Open **Nsight Compute (GUI)**.
 * Go to **File → Open**, and select your generated `.nsys-rep` file.
@@ -47,7 +47,7 @@ This will generate a report file named:
 
 ---
 
-#### **4️⃣ Generate textual statistics (optional)**
+#### **4. Generate textual statistics (optional)**
 
 To get a quick summary in text form:
 
@@ -57,7 +57,7 @@ nsys stats D:\Dash_assignment\DaSH-Lab-Induction-Assignment-2025\part1_matrix_mu
 
 ---
 
-✅ **Summary**
+**Summary**
 
 * Compile → `nvcc -O3 -arch=sm_86 -lcublas -o exe file.cu`
 * Profile → `nsys profile --trace=cuda,cublas,nvtx --sample=none -o report exe`
@@ -65,3 +65,7 @@ nsys stats D:\Dash_assignment\DaSH-Lab-Induction-Assignment-2025\part1_matrix_mu
 * Optional text stats → `nsys stats path\report.nsys-rep`
 
 ---
+
+**References**
+
+- https://siboehm.com/articles/22/CUDA-MMM
