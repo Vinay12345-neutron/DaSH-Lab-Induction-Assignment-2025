@@ -48,7 +48,7 @@ The core issue arises from two characteristics of the KV cache:
 
 ### Why existing solutions are inadequate
 
-Existing solutions, exemplified by Orca (a state-of-the-art system) and Faster Transformer, are inadequate because they rely on statically or over-provisionally allocating a contiguous memory chunk based on the request's maximum possible sequence length (e.g., 2048 tokens). This approach leads to three main types of memory waste (as quantified in Figure 2):
+Existing solutions, exemplified by Orca (a state-of-the-art system) and Faster Transformer, are inadequate because they rely on statically or over-provisionally allocating a contiguous memory chunk based on the request's maximum possible sequence length (e.g., 2048 tokens). This approach leads to three main types of memory waste:
 
 **Internal Fragmentation:** Memory reserved for the request's maximum possible length that is never actually used if the generated sequence is short. This can be up to $57.3\%$ of the KV cache memory (Orca Max).
 
@@ -56,7 +56,7 @@ Existing solutions, exemplified by Orca (a state-of-the-art system) and Faster T
 
 **External Fragmentation:** Since the required contiguous chunk sizes vary between requests, a contiguous memory allocator (like the buddy allocator used by Orca) cannot efficiently pack the chunks, leaving unusable gaps.
 
-Furthermore, the requirement for a contiguous chunk prohibits memory sharing. In complex decoding (like beam search or parallel sampling), multiple output sequences often share a common prompt or prefix. Contiguous allocation forces a full copy for each sequence, duplicating the shared prefix cache and wasting significant memory (Figure 8).
+Furthermore, the requirement for a contiguous chunk prohibits memory sharing. In complex decoding (like beam search or parallel sampling), multiple output sequences often share a common prompt or prefix. Contiguous allocation forces a full copy for each sequence, duplicating the shared prefix cache and wasting significant memory.
 
 ### Motivating examples or workloads
 
@@ -82,7 +82,7 @@ The KV cache for a sequence is divided into Logical KV Blocks.
 
 The system maintains a Block Table for each sequence, mapping its Logical KV Blocks to non-contiguous Physical KV Blocks stored in GPU DRAM.
 
-The PagedAttention kernel is modified to read the key and value vectors block-wise using this block table mapping (Figure 5). This non-contiguous access decouples the logical view of the sequence from the physical memory layout, eliminating the contiguous memory requirement.
+The PagedAttention kernel is modified to read the key and value vectors block-wise using this block table mapping. This non-contiguous access decouples the logical view of the sequence from the physical memory layout, eliminating the contiguous memory requirement.
 
 **Dynamic Block Allocation:**
 
@@ -154,11 +154,11 @@ Optimal Block Size is around 16-32 tokens, balancing GPU utilization/parallelism
 
 The results strongly support the claims:
 
-Near-zero waste: Figure 2 shows vLLM using $96.3\%$ of the KV cache for actual token states, compared to $20.4\% - 38.2\%$ for Orca baselines, proving the effectiveness of the paging approach in reducing fragmentation.
+Near-zero waste: It is shown the vLLMs using $96.3\%$ of the KV cache for actual token states, compared to $20.4\% - 38.2\%$ for Orca baselines, proving the effectiveness of the paging approach in reducing fragmentation.
 
-Flexible sharing: The superior performance in beam search and parallel sampling (Figure 14) and the quantified memory savings (Figure 15) demonstrate that the CoW-enabled block-level sharing is highly effective in practice, especially for workloads with common prefixes or shared tree structures.
+Flexible sharing: The superior performance in beam search and parallel sampling and the quantified memory savings demonstrate that the CoW-enabled block-level sharing is highly effective in practice, especially for workloads with common prefixes or shared tree structures.
 
-High throughput: The consistent 2x-4x throughput improvements across different models and workloads (Figure 12) prove that solving the memory bottleneck via paging is the key to maximizing GPU utility in LLM serving.
+High throughput: The consistent 2x-4x throughput improvements across different models and workloads prove that solving the memory bottleneck via paging is the key to maximizing GPU utility in LLM serving.
 
 ## 3. Critical Analysis
 
@@ -174,11 +174,11 @@ Robust Evaluation against Strong Baselines: The paper uses comprehensive and rea
 
 ### Weaknesses
 
-Kernel Overhead and Optimality: While the paper claims the 20-26% higher attention kernel latency for PagedAttention (Figure 18a) is small, this overhead is fundamental to the non-contiguous memory access. As models get smaller or token generation latency becomes dominated by compute rather than memory (e.g., with very fast future GPUs), this overhead could become the dominant factor, limiting the theoretical peak performance of the GPU. The design is optimized for memory-bound scenarios, which may not always hold true.
+Kernel Overhead and Optimality: While the paper claims the 20-26% higher attention kernel latency for PagedAttention is small, this overhead is fundamental to the non-contiguous memory access. As models get smaller or token generation latency becomes dominated by compute rather than memory (e.g., with very fast future GPUs), this overhead could become the dominant factor, limiting the theoretical peak performance of the GPU. The design is optimized for memory-bound scenarios, which may not always hold true.
 
 Increased Complexity and Implementation Burden: Introducing a block table, a two-level memory management hierarchy (logical-to-physical), and complex CoW/reference counting significantly complicates the core attention kernel and the scheduler. Maintaining this complexity, especially in CUDA kernels, is a high engineering cost compared to the simpler, contiguous buffer approach. Future optimizations to the underlying deep learning framework's attention kernel (like FlashAttention) may be harder to integrate.
 
-Swapping vs. Recomputation Trade-off: The discussion and evaluation of swapping (to CPU RAM) vs. recomputation (Figure 19) are important but show that the optimal recovery mechanism is highly dependent on the block size and the PCIe bandwidth. Given that recomputation latency is never much worse than swapping and is much simpler, the argument for including swapping as a feature is somewhat weak, especially since it requires the complexity of a separate CPU block allocator and memory transfer management.
+Swapping vs. Recomputation Trade-off: The discussion and evaluation of swapping (to CPU RAM) vs. recomputation are important but show that the optimal recovery mechanism is highly dependent on the block size and the PCIe bandwidth. Given that recomputation latency is never much worse than swapping and is much simpler, the argument for including swapping as a feature is somewhat weak, especially since it requires the complexity of a separate CPU block allocator and memory transfer management.
 
 ### Specific Critiques 
 
@@ -188,7 +188,7 @@ The use of Normalized Latency (s/token) vs. Request Rate (req/s) is highly appro
 
 ### 2. Is the baseline comparison fair? (Critique: Extremely Fair and Effective)
 
-The baseline comparison is outstandingly fair. By implementing three versions of Orca, particularly the Orca (Oracle) baseline, the authors move beyond simply comparing against existing performance and instead benchmark against the theoretical upper bound of the contiguous-allocation design. Demonstrating that vLLM still outperforms the Oracle baseline by up to 2.7x (Figure 12) is the most compelling piece of evidence that the paging approach is fundamentally superior for this class of problem, regardless of how well the contiguous approach is optimized.
+The baseline comparison is outstandingly fair. By implementing three versions of Orca, particularly the Orca (Oracle) baseline, the authors move beyond simply comparing against existing performance and instead benchmark against the theoretical upper bound of the contiguous-allocation design. Demonstrating that vLLM still outperforms the Oracle baseline by up to 2.7x is the most compelling piece of evidence that the paging approach is fundamentally superior for this class of problem, regardless of how well the contiguous approach is optimized.
 
 ### 3. Does the solution generalize beyond the tested scenarios? (Critique: High Generalizability, but limited to KV Cache/Autoregression)
 
