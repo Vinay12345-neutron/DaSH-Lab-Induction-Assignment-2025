@@ -112,23 +112,27 @@ sgemm2DBlocktiling(int M, int N, int K, float alpha, const float *A,
         B += BK * N;      // move down by BK rows in B
 
         // ---- compute the partial products for this K‑chunk ------------
-        for (uint dotIdx = 0; dotIdx < BK; ++dotIdx)
+        // 2‑D block tiling – each thread produces TM × TN results
+        for (uint dotIdx = 0; dotIdx < BK; ++dotIdx) // iterates over K-tiles
         {
-            // load TM elements of the current column of A into registers
+            // load TM elements of the current column of A (one per row) into registers
             for (uint i = 0; i < TM; ++i)
                 regM[i] = As[(threadRow * TM + i) * BK + dotIdx];
+                // regM holds A[ row = threadRow*TM+i , col = dotIdx ]
 
-            // load TN elements of the current row of B into registers
+            // load TN elements of the current row of B (one per column) into registers
             for (uint i = 0; i < TN; ++i)
                 regN[i] = Bs[dotIdx * BN + threadCol * TN + i];
+                // regN holds B[ row = dotIdx , col = threadCol*TN+i ]
 
-            // accumulate TM × TN products
+            // outer‑product of the two vectors → TM×TN partial result, accumulate TM × TN products
             for (uint resIdxM = 0; resIdxM < TM; ++resIdxM)
             {
                 for (uint resIdxN = 0; resIdxN < TN; ++resIdxN)
                 {
                     threadResults[resIdxM * TN + resIdxN] +=
                         regM[resIdxM] * regN[resIdxN];
+                        // each combination (row, col) of the mini‑matrix gets one product
                 }
             }
         }

@@ -84,14 +84,19 @@ __global__ void sgemm1DBlocktiling(int M, int N, int K,
         A += BK;            // move right by BK columns in A
         B += BK * N;        // move down by BK rows in B
 
-        // Compute the partial dot‑product for this chunk
+        // 1‑D block tiling – each thread produces TM rows of ONE column
         for (unsigned int dotIdx = 0; dotIdx < BK; ++dotIdx)
         {
+            // ONE B element is needed because all TM results share the same column
             float tmpB = Bs[dotIdx * BN + threadCol];
+
+            // TM different rows of A are needed (one per result)
             for (unsigned int resIdx = 0; resIdx < TM; ++resIdx)
             {
+                // A element belongs to row (threadRow*TM + resIdx) and column dotIdx
                 threadResults[resIdx] +=
                     As[(threadRow * TM + resIdx) * BK + dotIdx] * tmpB;
+                    // column of A  ×  same B element → partial dot‑product
             }
         }
         __syncthreads();
