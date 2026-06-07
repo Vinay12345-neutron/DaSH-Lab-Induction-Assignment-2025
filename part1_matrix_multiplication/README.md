@@ -69,3 +69,4 @@ nsys stats D:\Dash_assignment\DaSH-Lab-Induction-Assignment-2025\part1_matrix_mu
 **References**
 
 - https://siboehm.com/articles/22/CUDA-MMM
+- NVIDIA DOCS
